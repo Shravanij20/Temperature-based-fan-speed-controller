@@ -1,0 +1,86 @@
+#define BLYNK_TEMPLATE_ID "TMPL3WC94gP5C"
+#define BLYNK_TEMPLATE_NAME "IOT APP"
+#define BLYNK_AUTH_TOKEN "1rog2rBXgwkB2urzUA2sXnSDB5LmIt7Q"
+#include <BlynkSimpleEsp8266.h>
+#include "ThingSpeak.h"
+#include <ESP8266WiFi.h>
+
+#define BLYNK_PRINT Serial
+char auth[] = "1rog2rBXgwkB2urzUA2sXnSDB5LmIt7Q";  // Enter your Blynk auth token here
+char ssid[] = "realme narzo 30";       // Enter your WiFi name here
+char pass[] = "98761234";   // Enter your WiFi password here
+
+const int tempPin = A0;  // LM35 analog pin
+const int fanPin = D6;   // Fan control pin
+int threshold = 30;       // Default threshold value
+
+float previousTemp = 0.0; // Variable to store previous temperature
+bool temperatureIncreased = false; // Flag to track temperature increase
+
+BlynkTimer timer;
+
+WiFiClient client;
+unsigned long myChannelNumber = 2463160; // Channel ID here
+const int FieldNumber = 1;
+const char* myWriteAPIKey = "Q8C98C3R8T5VAMM4"; // Your Write API Key here
+
+BLYNK_WRITE(V7) {
+  threshold = param.asInt();  // Update threshold value from Blynk slider
+}
+
+void sendSensor() {
+  int reading = analogRead(tempPin);
+  float temp = (reading * 3.3 / 1024) * 100;
+  Serial.print("Temperature: ");
+  Serial.print(temp);
+  Serial.println(" C");
+
+  Blynk.virtualWrite(V3, temp); // Send temperature value to Blynk
+
+  if (temp > previousTemp) {
+    temperatureIncreased = true; // Set flag to true if temperature increased
+  }
+
+  if (temp < threshold) {
+    analogWrite(fanPin, 0);
+    Blynk.virtualWrite(V4, 0); // Send fan status to Blynk
+
+  } else if (temp < 35) {
+    analogWrite(fanPin, 128);
+    Blynk.virtualWrite(V4, 40); // Send fan status to Blynk
+  } else if (temp < 45) {
+    analogWrite(fanPin, 192);
+    Blynk.virtualWrite(V4, 60); // Send fan status to Blynk
+
+  } else {
+    analogWrite(fanPin, 255);
+    Blynk.virtualWrite(V4, 100); // Send fan status to Blynk
+  }
+
+  delay(1000);
+  ThingSpeak.writeField(myChannelNumber, FieldNumber, temp, myWriteAPIKey);
+
+
+
+  previousTemp = temp; // Update previous temperature
+}
+
+void setup() {
+  Serial.begin(9600);
+  Blynk.begin(auth, ssid, pass);
+  pinMode(fanPin, OUTPUT);
+
+  pinMode(fanPin, OUTPUT);
+  WiFi.mode(WIFI_STA);
+  ThingSpeak.begin(client);
+
+  // Setup Blynk virtual pins
+  Blynk.virtualWrite(V7, threshold); // Initialize threshold slider value
+  Blynk.virtualWrite(V3, 0); // Initialize temperature value
+  timer.setInterval(1000L, sendSensor);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+}
